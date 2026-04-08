@@ -14,6 +14,8 @@ Current capabilities:
 8. Use a multi-role LLM workflow with verifier, reflection, and repair agents.
 9. Feed counterexample assignments from Z3 back into the repair loop when SAT equivalence fails.
 10. Use Volcengine Ark Coding OpenAI-compatible API as the default live provider.
+11. Run an MCTS-CORF-style deterministic optimizer for SMT redundancy reduction.
+12. Use UNSAT core guidance, reward shaping, dynamic termination, and core projection for the second POST path.
 
 ## API
 
@@ -49,10 +51,13 @@ For SMT-LIB optimization requests:
 4. Run an MCTS-CORF-style safe-deletion search over assertions.
 5. If the source is SAT, only keep deletions that preserve logical equivalence.
 6. If the source is UNSAT, only keep deletions that preserve the UNSAT solver status.
-7. Optionally send the deterministic best candidate to the LLM for conservative post-optimization.
-8. Validate the optimized result with Z3.
-9. For SAT scripts, run semantic equivalence checking and counterexample-guided repair when needed.
-10. For UNSAT scripts, enforce UNSAT preservation rather than logical equivalence.
+7. Use UNSAT core guidance to prioritize non-core deletions during UNSAT search.
+8. Apply UNSAT core projection to release whole batches of non-core assertions and move the candidate closer to a smaller unsatisfied subset.
+9. Stop the search dynamically based on frontier exhaustion, stagnation, time budget, or iteration budget.
+10. Optionally send the deterministic best candidate to the LLM for conservative post-optimization.
+11. Validate the optimized result with Z3.
+12. For SAT scripts, run semantic equivalence checking and counterexample-guided repair when needed.
+13. For UNSAT scripts, enforce UNSAT preservation rather than logical equivalence.
 
 ## Provider Defaults
 
@@ -90,6 +95,35 @@ The SMT optimization path now exposes additional search settings.
 - `OPTIMIZER_MAX_CHILDREN=8`
 - `OPTIMIZER_EXPLORATION_WEIGHT=0.3`
 - `OPTIMIZER_ENABLE_LLM_POSTPASS=true`
+- `OPTIMIZER_PATIENCE=6`
+- `OPTIMIZER_MIN_REWARD_GAIN=0.001`
+- `OPTIMIZER_TIME_BUDGET_MS=0`
+- `OPTIMIZER_ENABLE_UNSAT_CORE_GUIDANCE=true`
+- `OPTIMIZER_ENABLE_UNSAT_CORE_PROJECTION=true`
+- `OPTIMIZER_UNSAT_CORE_SAMPLES=3`
+- `OPTIMIZER_UNSAT_CORE_SAMPLE_TIMEOUT_MS=120`
+- `OPTIMIZER_UNSAT_CORE_SAMPLE_ASSERTION_LIMIT=64`
+
+UNSAT core guidance now uses bounded multi-core sampling:
+- up to `OPTIMIZER_UNSAT_CORE_SAMPLES` solver calls per state,
+- deterministic sample first, then shuffled samples,
+- early stop when consecutive samples converge to one identical core,
+- if the assertion count is large (`OPTIMIZER_UNSAT_CORE_SAMPLE_ASSERTION_LIMIT`), it uses a single sample to bound overhead,
+- each sample uses `OPTIMIZER_UNSAT_CORE_SAMPLE_TIMEOUT_MS` timeout in ms.
+
+## Local Regression Tests
+
+Use the built-in unittest suite to exercise the second POST path on one SAT sample and one UNSAT sample.
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Regression fixtures are stored in:
+
+- [tests/fixtures/sat_redundant.smt2](f:/Code/Project/smt/tests/fixtures/sat_redundant.smt2)
+- [tests/fixtures/unsat_redundant.smt2](f:/Code/Project/smt/tests/fixtures/unsat_redundant.smt2)
+- [tests/test_smt_optimization_regression.py](f:/Code/Project/smt/tests/test_smt_optimization_regression.py)
 
 ## Z3 Setup
 
@@ -107,7 +141,7 @@ Alternative option:
 Note:
 
 - Syntax and solver-status validation can fall back to `z3.exe`.
-- SAT semantic equivalence checking, tautology detection, and MCTS-CORF safe-deletion search require the Python package `z3-solver`.
+- SAT semantic equivalence checking, tautology detection, UNSAT core guidance, and MCTS-CORF safe-deletion search require the Python package `z3-solver`.
 
 ## Key Files
 

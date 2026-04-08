@@ -76,6 +76,21 @@ class OptimizationSummary(BaseModel):
     semantic_score: Optional[float] = None
     solver_score: Optional[float] = None
     used_llm_postpass: bool = False
+    termination_reason: Optional[str] = None
+    best_depth: int = 0
+    stagnation_rounds: int = 0
+    unsat_core_available: Optional[bool] = None
+    reference_unsat_core_size: Optional[int] = None
+    final_unsat_core_size: Optional[int] = None
+    unsat_core_sample_count: int = 0
+    unsat_core_distinct_count: int = 0
+    stable_unsat_core_size: Optional[int] = None
+    union_unsat_core_size: Optional[int] = None
+    core_guided_actions: int = 0
+    protected_core_skips: int = 0
+    core_release_rounds: int = 0
+    core_projection_applied: bool = False
+    core_projection_reductions: int = 0
     notes: List[str] = Field(default_factory=list)
 
 

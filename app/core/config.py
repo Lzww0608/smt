@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     optimizer_max_children: int = Field(default=8, ge=1)
     optimizer_exploration_weight: float = Field(default=0.3, ge=0.0)
     optimizer_enable_llm_postpass: bool = True
+    optimizer_patience: int = Field(default=6, ge=1)
+    optimizer_min_reward_gain: float = Field(default=0.001, ge=0.0)
+    optimizer_time_budget_ms: int = Field(default=0, ge=0)
+    optimizer_enable_unsat_core_guidance: bool = True
+    optimizer_enable_unsat_core_projection: bool = True
+    optimizer_unsat_core_samples: int = Field(default=3, ge=1)
+    optimizer_unsat_core_sample_timeout_ms: int = Field(default=120, ge=0)
+    optimizer_unsat_core_sample_assertion_limit: int = Field(default=64, ge=1)
 
     class Config:
         env_file = ".env"
