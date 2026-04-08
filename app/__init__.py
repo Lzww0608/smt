@@ -1,0 +1,1 @@
+"""SMT backend application package."""
