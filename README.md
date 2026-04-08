@@ -71,7 +71,7 @@ The real API key is expected in local `.env`.
 
 ## Install
 
-This project targets Python 3.7+.
+This project targets Python 3.10+ (recommended: Python 3.10.19).
 
 ```powershell
 python -m venv .venv
@@ -80,10 +80,22 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+```bash
+python3.10 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
 ## Run
 
 ```powershell
 .\start_backend.ps1
+```
+
+```bash
+chmod +x ./start_backend.sh
+./start_backend.sh 0.0.0.0 8000
 ```
 
 ## Optimizer Settings

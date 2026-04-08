@@ -12,8 +12,8 @@ if ($LASTEXITCODE -ne 0) {
 $versionParts = $pythonVersion.Trim().Split('.')
 $major = [int]$versionParts[0]
 $minor = [int]$versionParts[1]
-if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 7)) {
-    Write-Error "Python 3.7+ is required. Current version: $pythonVersion."
+if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 10)) {
+    Write-Error "Python 3.10+ is required. Current version: $pythonVersion."
     exit 1
 }
 
