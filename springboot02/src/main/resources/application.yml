@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/lzw?useSSL=false&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 1234580
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+app:
+  cors:
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173
+
+smt:
+  backend:
+    base-url: http://127.0.0.1:8000
+    transform-path: /api/v1/smt/transform
+    connect-timeout-seconds: 10
+    read-timeout-seconds: 120
