@@ -1,152 +1,162 @@
 # SMT System
 
-This repository is now an integrated system, not just a standalone Python service.
+This repository contains a complete three-layer SMT system.
 
-The actual request chain is:
+The current runtime architecture is:
 
-`Vue (vite, 5173) -> Spring Boot (8080) -> Python SMT service (8000)`
+`Vue (Vite, 5173) -> Spring Boot (8080) -> Python SMT backend (8000)`
 
-The responsibilities are split as follows:
+If you only want the fastest Linux bring-up path, start with [QUICKSTART.md](QUICKSTART.md).
 
-- `vueProject/my-vue-app`: frontend UI, login page, chat page, admin page, optimize result display.
-- `springboot02`: user management, session management, chat history, optimize record persistence, and HTTP bridge to the Python SMT service.
-- `app/`: Python SMT service, responsible for SMT generation, SMT redundancy reduction, LLM workflow, Z3 validation, repair, equivalence checking, and optimization workflow.
+## Components
 
-## Architecture
+- `vueProject/my-vue-app`
+  Frontend UI built with Vue 3 + Vite + Element Plus.
+- `springboot02`
+  Middle layer responsible for user/session/message/optimization-record persistence and for calling the Python SMT backend.
+- `app`
+  Python SMT service responsible for SMT generation, SMT optimization, Z3 validation, repair workflow, and equivalence/UNSAT-core analysis.
 
-### 1. Frontend
+## Repository Structure
 
-The frontend uses Vue 3 + Vite + Element Plus.
+```text
+.
+├─ app/
+├─ springboot02/
+├─ vueProject/
+│  └─ my-vue-app/
+├─ requirements.txt
+├─ start_backend.ps1
+├─ start_backend.sh
+├─ README.md
+└─ QUICKSTART.md
+```
 
-- Default dev server: `http://localhost:5173`
-- Backend base URL is configured in `vueProject/my-vue-app/axiosInstance.js`
-- Current default frontend target: `http://localhost:8080`
-- You can override it with `VITE_API_BASE_URL`
+All paths in this document are repository-relative paths.
 
-Current frontend behavior:
+## Environment Requirements
 
-- Login and register through Spring Boot
-- Create and delete chat sessions through Spring Boot
-- Send natural language questions through Spring Boot
-- View chat history from Spring Boot
-- Trigger code optimization through Spring Boot
-- Read optimization records from Spring Boot
-- Open the admin page through Spring Boot-backed APIs
+To run the full stack on Linux, prepare all of the following.
 
-The browser does not directly call the Python SMT service in the integrated setup.
+### Python SMT backend
 
-### 2. Spring Boot middle layer
+- Python `3.10+`
+- recommended version: `3.10.19`
+- `pip`
+- `venv`
 
-Spring Boot is the system entry point for the frontend.
+Python dependencies are pinned in [requirements.txt](requirements.txt).
 
-It handles:
+### Spring Boot backend
 
-- user accounts
+- Java `17`
+- Maven `3.8+`
+- MySQL `8.x`
+
+Why:
+
+- the current Spring Boot version is `3.0.2`
+- Spring Boot `3.x` requires Java `17+`
+- the current datasource driver is MySQL Connector/J `8.0.31`
+
+### Vue frontend
+
+- Node.js `18+`
+- recommended version: `18 LTS` or `20 LTS`
+- npm `9+`
+
+Why:
+
+- the frontend uses Vue `3.2.47`
+- the build tool is Vite `4.2.0`
+- this combination is stable on modern Node LTS versions
+
+### Linux pre-check
+
+Before deployment, verify the runtime versions:
+
+```bash
+python3.10 --version
+java -version
+mvn -v
+node -v
+npm -v
+mysql --version
+```
+
+## Ports And CORS
+
+Recommended local ports:
+
+- Vue: `5173`
+- Spring Boot: `8080`
+- Python SMT backend: `8000`
+- MySQL: `3306`
+
+Current frontend base URL default:
+
+- `vueProject/my-vue-app/axiosInstance.js`
+- default target: `http://localhost:8080`
+- override with `VITE_API_BASE_URL`
+
+Current Spring Boot CORS default:
+
+- `http://localhost:5173`
+- `http://127.0.0.1:5173`
+
+Current Python backend CORS default:
+
+- `http://localhost:5173`
+- `http://127.0.0.1:5173`
+
+In the integrated architecture, the browser talks to Spring Boot only. Python CORS mainly matters when you test the Python API directly from a browser.
+
+## Runtime Responsibilities
+
+### Vue
+
+Vue is responsible for:
+
+- login/register UI
+- chat UI
+- admin UI
+- optimization result display
+
+Vue does not directly call the Python SMT backend in the integrated architecture.
+
+### Spring Boot
+
+Spring Boot is the entry point for the browser.
+
+It is responsible for:
+
+- users
 - chat sessions
 - chat messages
 - optimization records
-- forwarding SMT requests to the Python backend
+- forwarding SMT generation and SMT optimization requests to the Python service
 
-Current runtime assumptions:
+### Python SMT backend
 
-- Java: `17`
-- Spring Boot: `3.0.2`
-- MySQL driver: `8.0.31`
-- default HTTP port: `8080`
+The Python service is the SMT engine.
 
-Current Python bridge config is in `springboot02/src/main/resources/application.yml`:
+It is responsible for:
 
-```yml
-smt:
-  backend:
-    base-url: http://127.0.0.1:8000
-    transform-path: /api/v1/smt/transform
-    connect-timeout-seconds: 10
-    read-timeout-seconds: 120
-```
+- natural-language-to-SMT generation
+- SMT redundancy reduction
+- Z3 validation
+- automatic repair workflow
+- SAT equivalence checking
+- counterexample-guided repair
+- UNSAT-core-guided optimization
 
-This means:
-
-- Vue sends requests to Spring Boot
-- Spring Boot sends SMT generation and SMT optimization requests to the Python backend
-- Python returns the SMT result
-- Spring Boot stores the result into MySQL when needed
-
-### 3. Python SMT backend
-
-The Python service is the SMT engine of the system.
-
-Current runtime assumptions:
-
-- Python: `3.10+` recommended `3.10.19`
-- default HTTP port: `8000`
-- main API: `POST /api/v1/smt/transform`
-
-Current request modes:
-
-- `content_type = natural_language`: generate SMT from natural language
-- `content_type = smt_code`: optimize and reduce redundancy in SMT code
-- `content_type = auto`: heuristic detection
-
-The Python service does not use MySQL in the current architecture. It is stateless with respect to user/session storage. Persistence is handled by Spring Boot.
-
-## Real request flow
-
-### 1. Login and user management
-
-Vue calls Spring Boot directly:
-
-- `POST /login`
-- `POST /register`
-- `POST /updatePassword`
-- `POST /deleteUser`
-- `GET /users`
-
-These requests read and write the `users` table.
-
-Admin recognition is currently based on `users.user_type`:
-
-- `0`: normal user
-- `1`: admin user
-
-### 2. Chat flow
-
-When the user sends a natural language question:
-
-1. Vue calls Spring Boot `POST /send`
-2. Spring Boot saves the user message into `chat_message`
-3. Spring Boot calls Python `POST /api/v1/smt/transform` with `content_type=natural_language`
-4. Python generates SMT, validates it, and returns the final SMT result
-5. Spring Boot saves the returned SMT as a system message into `chat_message`
-6. Vue reloads message history from Spring Boot `GET /messages`
-
-Important detail:
-
-- the saved system message content is the SMT result returned by Python
-- Spring Boot currently stores that system reply with `sender_type=system`
-- Spring Boot currently stores that system reply with `message_type=smt_code`
-
-### 3. SMT optimization flow
-
-When the user clicks optimize on a system SMT message:
-
-1. Vue calls Spring Boot `POST /optimizeCode`
-2. Spring Boot resolves the optimization source in this priority order:
-   - `originalCode` from frontend request
-   - latest `optimize_record.optimized_code` for that message
-   - current `chat_message.content` of the target system message
-3. Spring Boot calls Python `POST /api/v1/smt/transform` with `content_type=smt_code`
-4. Python performs SMT redundancy reduction, validation, repair, and optimization workflow
-5. Spring Boot saves the returned optimized SMT into `optimize_record`
-6. Vue reads optimization history through `GET /optimizeRecords/byMessage`
-
-This is the current actual architecture. Vue does not directly optimize through Python.
+The Python service does not directly read or write MySQL in the current design.
 
 ## Database
 
-Spring Boot expects a MySQL database.
+Spring Boot currently expects MySQL configuration from `springboot02/src/main/resources/application.yml`.
 
-Current configuration in `springboot02/src/main/resources/application.yml` is:
+Current local defaults:
 
 ```yml
 spring:
@@ -157,15 +167,15 @@ spring:
     password: 1234580
 ```
 
-This means the local default assumptions are:
+This means:
 
 - host: `localhost`
 - port: `3306`
 - database: `lzw`
-- user: `root`
+- username: `root`
 - password: `1234580`
 
-For a real deployment, you should change the MySQL account and password before use.
+For real deployment, change these credentials before use.
 
 ### Required tables
 
@@ -180,6 +190,11 @@ password
 create_time
 user_type
 ```
+
+`user_type` meaning:
+
+- `0`: normal user
+- `1`: admin user
 
 #### `chat_session`
 
@@ -214,27 +229,56 @@ optimized_code
 create_time
 ```
 
-### Database responsibility split
+### Important note
 
-- `users`, `chat_session`, `chat_message`, `optimize_record` are owned by Spring Boot
-- Python SMT backend does not read or write MySQL directly
+This repository currently does not include a ready-to-run SQL initialization script. You need to create/import the schema yourself before starting Spring Boot.
 
-## Ports and CORS
+## Main Request Flows
 
-Recommended local ports:
+### 1. Login and user management
 
-- Vue: `5173`
-- Spring Boot: `8080`
-- Python SMT backend: `8000`
+`Vue -> Spring Boot -> MySQL`
 
-Current CORS behavior:
+Main APIs:
 
-- Spring Boot allows `http://localhost:5173,http://127.0.0.1:5173`
-- Python backend also allows `http://localhost:5173,http://127.0.0.1:5173`
+- `POST /login`
+- `POST /register`
+- `POST /updatePassword`
+- `POST /deleteUser`
+- `GET /users`
 
-In the integrated architecture, the browser only needs Spring Boot CORS. Python CORS mainly matters if you test the Python API directly from a browser.
+### 2. Chat / SMT generation
 
-## Startup order
+When a user submits natural language:
+
+1. Vue calls Spring Boot `POST /send`
+2. Spring Boot saves the user message into `chat_message`
+3. Spring Boot calls Python `POST /api/v1/smt/transform` with `content_type=natural_language`
+4. Python generates SMT and validates it
+5. Spring Boot stores the returned SMT as a system message in `chat_message`
+6. Vue reloads the conversation through `GET /messages`
+
+Current message storage detail:
+
+- user messages: `sender_type=user`
+- Python-generated replies: `sender_type=system`
+- Python-generated SMT replies: `message_type=smt_code`
+
+### 3. SMT optimization
+
+When a user clicks optimize on a system SMT message:
+
+1. Vue calls Spring Boot `POST /optimizeCode`
+2. Spring Boot resolves the optimization source in this order:
+   - `originalCode` from the current request
+   - latest `optimize_record.optimized_code`
+   - current `chat_message.content`
+3. Spring Boot calls Python `POST /api/v1/smt/transform` with `content_type=smt_code`
+4. Python optimizes the SMT code
+5. Spring Boot stores the optimized result in `optimize_record`
+6. Vue reloads optimization history through `GET /optimizeRecords/byMessage`
+
+## Startup Order
 
 The correct startup order is:
 
@@ -246,24 +290,29 @@ The correct startup order is:
 Reason:
 
 - Spring Boot depends on MySQL
-- Spring Boot also depends on Python SMT for `/send` and `/optimizeCode`
+- Spring Boot also depends on the Python SMT backend for `/send` and `/optimizeCode`
 - Vue depends on Spring Boot
 
-## How to run
+## How To Run
 
 ### 1. Start MySQL
 
-Make sure the `lzw` database exists and the required tables have been created.
+Make sure:
+
+- the `lzw` database exists
+- the required tables have been created
+- the credentials in `springboot02/src/main/resources/application.yml` are correct
 
 ### 2. Start Python SMT backend
 
-Install dependencies:
+From the repository root:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+.\start_backend.ps1
 ```
 
 ```bash
@@ -271,26 +320,16 @@ python3.10 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+./start_backend.sh 0.0.0.0 8000
 ```
 
-Configure `.env` for the Python service. At minimum, check:
+At minimum, check `.env` for:
 
 - `LLM_API_KEY`
 - `LLM_API_BASE_URL`
 - `LLM_MODEL`
 - `APP_HOST`
 - `APP_PORT`
-
-Run the Python service:
-
-```powershell
-.\start_backend.ps1
-```
-
-```bash
-chmod +x ./start_backend.sh
-./start_backend.sh 0.0.0.0 8000
-```
 
 Health check:
 
@@ -300,25 +339,14 @@ GET http://127.0.0.1:8000/health
 
 ### 3. Start Spring Boot
 
-Requirements:
-
-- Java `17`
-- Maven available in `PATH`
-
-Spring Boot project path:
-
-```text
-springboot02
-```
-
-Start it with one of these methods:
+From `springboot02`:
 
 ```bash
 cd springboot02
 mvn spring-boot:run
 ```
 
-or run the main class:
+Or run the main class:
 
 ```text
 com.example.springboot02.Springboot02Application
@@ -326,15 +354,20 @@ com.example.springboot02.Springboot02Application
 
 Before starting Spring Boot, confirm:
 
-- MySQL is reachable with the credentials in `application.yml`
+- MySQL is already running
+- the schema already exists
 - Python SMT backend is already listening at `http://127.0.0.1:8000`
+- Java version is `17`
+- Maven is available in the shell
 
 ### 4. Start Vue
 
-Frontend project path:
+From `vueProject/my-vue-app`:
 
-```text
-vueProject/my-vue-app
+```bash
+cd vueProject/my-vue-app
+npm install
+npm run dev
 ```
 
 Optional frontend env:
@@ -343,23 +376,15 @@ Optional frontend env:
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-Install and run:
-
-```bash
-cd vueProject/my-vue-app
-npm install
-npm run dev
-```
-
-Then open the Vite URL shown in the terminal, usually:
+The Vite dev server is usually:
 
 ```text
 http://localhost:5173
 ```
 
-## Integrated API mapping
+## Integrated API Mapping
 
-The integrated system currently uses these main Spring Boot endpoints from Vue:
+Vue mainly uses these Spring Boot endpoints:
 
 - `POST /login`
 - `POST /register`
@@ -377,11 +402,11 @@ The integrated system currently uses these main Spring Boot endpoints from Vue:
 - `POST /optimizeCode`
 - `POST /deleteOptimizeRecord`
 
-The Spring Boot application currently calls this Python endpoint internally:
+Spring Boot internally calls this Python endpoint:
 
 - `POST /api/v1/smt/transform`
 
-Spring Boot sends:
+Spring Boot sends JSON like this:
 
 ```json
 {
@@ -390,29 +415,14 @@ Spring Boot sends:
 }
 ```
 
-## Python SMT features
-
-The Python backend currently includes:
-
-- natural-language-to-SMT generation
-- SMT redundancy reduction
-- Z3 syntax and solvability validation
-- automatic repair loop
-- verifier / reflection / repair multi-agent prompting
-- SAT equivalence checking
-- counterexample-guided repair
-- UNSAT core guidance
-- bounded multi-core sampling and intersection statistics
-- MCTS-CORF-style deterministic optimization
-
 ## Troubleshooting
 
-### Vue can open but cannot log in or load history
+### Vue opens but login/history fails
 
 Check:
 
 - Spring Boot is running on `8080`
-- `VITE_API_BASE_URL` points to the right Spring Boot address
+- `VITE_API_BASE_URL` points to the correct Spring Boot address
 - MySQL is running and the `lzw` database is reachable
 
 ### Login works but send/optimize fails
@@ -420,8 +430,8 @@ Check:
 Check:
 
 - Python SMT backend is running on `8000`
-- Spring Boot `smt.backend.base-url` points to the correct Python service
-- Python `.env` has a valid LLM API key
+- Spring Boot `smt.backend.base-url` points to the correct Python backend
+- Python `.env` contains a valid LLM API key
 - `z3-solver` is installed in the Python environment
 
 ### Spring Boot starts but chat/optimization still fails
@@ -429,16 +439,17 @@ Check:
 Check:
 
 - the target system message exists in `chat_message`
-- `optimize_record` table exists
-- Spring Boot can reach Python with `POST /api/v1/smt/transform`
+- the `optimize_record` table exists
+- Spring Boot can reach Python `POST /api/v1/smt/transform`
 
-## Key files
+## Key Paths
 
-- [README.md](f:/Code/Project/smt/README.md)
-- [springboot02/src/main/resources/application.yml](f:/Code/Project/smt/springboot02/src/main/resources/application.yml)
-- [springboot02/src/main/java/com/example/springboot02/service/SmtTransformClient.java](f:/Code/Project/smt/springboot02/src/main/java/com/example/springboot02/service/SmtTransformClient.java)
-- [springboot02/src/main/java/com/example/springboot02/service/Impl/ChatServiceImpl.java](f:/Code/Project/smt/springboot02/src/main/java/com/example/springboot02/service/Impl/ChatServiceImpl.java)
-- [springboot02/src/main/java/com/example/springboot02/service/Impl/OptimizeRecordServiceImpl.java](f:/Code/Project/smt/springboot02/src/main/java/com/example/springboot02/service/Impl/OptimizeRecordServiceImpl.java)
-- [vueProject/my-vue-app/axiosInstance.js](f:/Code/Project/smt/vueProject/my-vue-app/axiosInstance.js)
-- [app/api/routes.py](f:/Code/Project/smt/app/api/routes.py)
-- [app/services/workflow.py](f:/Code/Project/smt/app/services/workflow.py)
+- [QUICKSTART.md](QUICKSTART.md)
+- [requirements.txt](requirements.txt)
+- [springboot02/src/main/resources/application.yml](springboot02/src/main/resources/application.yml)
+- [springboot02/src/main/java/com/example/springboot02/service/SmtTransformClient.java](springboot02/src/main/java/com/example/springboot02/service/SmtTransformClient.java)
+- [springboot02/src/main/java/com/example/springboot02/service/Impl/ChatServiceImpl.java](springboot02/src/main/java/com/example/springboot02/service/Impl/ChatServiceImpl.java)
+- [springboot02/src/main/java/com/example/springboot02/service/Impl/OptimizeRecordServiceImpl.java](springboot02/src/main/java/com/example/springboot02/service/Impl/OptimizeRecordServiceImpl.java)
+- [vueProject/my-vue-app/axiosInstance.js](vueProject/my-vue-app/axiosInstance.js)
+- [app/api/routes.py](app/api/routes.py)
+- [app/services/workflow.py](app/services/workflow.py)
